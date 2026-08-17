@@ -11,10 +11,10 @@ DB_NAME = "garden_life_5.db"
 
 # --- KULLANICI VE YETKİLENDİRME TANIMLARI ---
 USERS = {
-    "gl5y1": {"password": "123", "role": "admin", "name": "Yönetici (gl5y1)"},
-    "gl5y2": {"password": "123", "role": "viewer", "name": "Kullanıcı 2 (gl5y2)"},
-    "gl5y3": {"password": "123", "role": "viewer", "name": "Kullanıcı 3 (gl5y3)"},
-    "gl5y4": {"password": "123", "role": "viewer", "name": "Kullanıcı 4 (gl5y4)"}
+    "gl5y1": {"password": "_gl5y1", "role": "admin", "name": "Yönetici (gl5y1)"},
+    "gl5y2": {"password": "*gl5y2", "role": "viewer", "name": "Kullanıcı 2 (gl5y2)"},
+    "gl5y3": {"password": "*gl5y3", "role": "viewer", "name": "Kullanıcı 3 (gl5y3)"},
+    "gl5y4": {"password": "*gl5y4", "role": "viewer", "name": "Kullanıcı 4 (gl5y4)"}
 }
 
 def login_page():
