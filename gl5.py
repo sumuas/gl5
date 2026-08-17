@@ -9,6 +9,39 @@ from openpyxl.utils import get_column_letter
 
 DB_NAME = "garden_life_5.db"
 
+# --- KULLANICI VE YETKİLENDİRME TANIMLARI ---
+USERS = {
+    "gl5y1": {"password": "123", "role": "admin", "name": "Yönetici (gl5y1)"},
+    "gl5y2": {"password": "123", "role": "viewer", "name": "Kullanıcı 2 (gl5y2)"},
+    "gl5y3": {"password": "123", "role": "viewer", "name": "Kullanıcı 3 (gl5y3)"},
+    "gl5y4": {"password": "123", "role": "viewer", "name": "Kullanıcı 4 (gl5y4)"}
+}
+
+def login_page():
+    st.markdown("<h2 style='text-align: center;'>🏢 Garden Life 5 Giriş Paneli</h2>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        username_input = st.text_input("Kullanıcı Adı")
+        password_input = st.text_input("Şifre", type="password")
+        if st.button("Giriş Yap", use_container_width=True):
+            if username_input in USERS and USERS[username_input]["password"] == password_input:
+                st.session_state.logged_in = True
+                st.session_state.username = username_input
+                st.session_state.user_role = USERS[username_input]["role"]
+                st.session_state.user_name = USERS[username_input]["name"]
+                st.success("Giriş başarılı!")
+                st.rerun()
+            else:
+                st.error("Hatalı kullanıcı adı veya şifre!")
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+    login_page()
+    st.stop()
+
+# --- VERİTABANI İŞLEMLERİ ---
 def db_connect():
     return sqlite3.connect(DB_NAME)
 
@@ -36,7 +69,6 @@ def db_setup():
         cursor.execute("ALTER TABLE Daireler ADD COLUMN ev_sahibi_tel TEXT DEFAULT '-'")
         cursor.execute("ALTER TABLE Daireler ADD COLUMN kiraci TEXT DEFAULT 'Yok'")
         cursor.execute("ALTER TABLE Daireler ADD COLUMN kiraci_tel TEXT DEFAULT '-'")
-        # HATA DÜZELTİLDİ: telephone -> telefon yapıldı
         cursor.execute("UPDATE Daireler SET ev_sahibi = sakin_isim, ev_sahibi_tel = telefon WHERE ev_sahibi = 'Bilinmiyor'")
 
     cursor.execute('''
@@ -82,7 +114,6 @@ GIDER_KATEGORILERI = ['Personel Gider', 'Temizlik Gideri', 'Asansör Bakım Gide
 DONEM_LISTESI = [f"2026-{str(i).zfill(2)}" for i in range(1, 13)] + [f"2027-{str(i).zfill(2)}" for i in range(1, 13)]
 MEVCUT_DONEM_IDX = datetime.now().month - 1
 
-# Gelişmiş Excel Çıktısı Fonksiyonu (Bellek Üzerinden Çalışacak Şekilde Revize Edildi)
 def daire_ekstre_excel_bellek(veri):
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -188,12 +219,30 @@ def daire_ekstre_excel_bellek(veri):
     return output.getvalue()
 
 st.set_page_config(page_title="Garden Life 5 Yönetim Paneli", page_icon="🏢", layout="wide")
+
+# SAĞ ÜST YÖNETİCİ BİLGİSİ VE ÇIKIŞ BUTONU
+st.sidebar.markdown(f"👤 **Aktif Kullanıcı:** {st.session_state.user_name}")
+is_admin = st.session_state.user_role == "admin"
+
+if is_admin:
+    st.sidebar.success("🔑 Yetki: Tam Yönetici (Düzenleme Yapabilir)")
+else:
+    st.sidebar.info("👁️ Yetki: İzleyici (Sadece Görüntüleme)")
+
+if st.sidebar.button("🚪 Çıkış Yap"):
+    st.session_state.logged_in = False
+    st.session_state.username = None
+    st.session_state.user_role = None
+    st.rerun()
+
 st.title("🏢 Garden Life 5 - Web Yönetim Sistemi")
 
-menu = st.sidebar.radio(
-    "Menü Seçimi",
-    ["📊 Genel Özet (Dashboard)", "📋 Daire Cari Raporu", "📉 Gider Detayları & Analiz", "⚙️ Yönetimsel İşlemler"]
-)
+# Menü Yetkiye Göre Filtreleniyor
+menu_options = ["📊 Genel Özet (Dashboard)", "📋 Daire Cari Raporu", "📉 Gider Detayları & Analiz"]
+if is_admin:
+    menu_options.append("⚙️ Yönetimsel İşlemler")
+
+menu = st.sidebar.radio("Menü Seçimi", menu_options)
 
 def to_excel(df):
     output = io.BytesIO()
@@ -252,7 +301,6 @@ elif menu == "📋 Daire Cari Raporu":
         GROUP BY d.id ORDER BY d.blok_adi, d.daire_no
     ''', conn)
     
-    # Detaylı satır bazlı verileri (tarih, açıklama vs) buton için çekiyoruz
     df_tum_hareketler = pd.read_sql_query('''
         SELECT daire_id, tarih, aciklama, islem_tipi, tutar FROM CariHareketler ORDER BY tarih ASC
     ''', conn)
@@ -295,10 +343,8 @@ elif menu == "📋 Daire Cari Raporu":
         secilen_daire_kart = df_ana.iloc[row_idx]
         d_id = int(secilen_daire_kart["id"])
         
-        # Seçilen dairenin tüm ham loglarını listeye dönüştürme
         ham_hareketler = df_tum_hareketler[df_tum_hareketler["daire_id"] == d_id]
         
-        # Gelişmiş Excel fonksiyonu için dict yapısını dinamik hazırlıyoruz
         hareket_listesi = []
         gecici_bakiye = 0.0
         for _, h in ham_hareketler.iterrows():
@@ -333,7 +379,6 @@ elif menu == "📋 Daire Cari Raporu":
             "hareketler": hareket_listesi
         }
         
-        # ENTEGRASYON BUTONU: Daireye özel formatlanmış Excel çıktısı tetikleyici
         detay_excel_data = daire_ekstre_excel_bellek(daire_ozet_veri)
         st.download_button(
             label=f"📥 {secilen_daire_kart['Blok']}-{secilen_daire_kart['Daire No']} Alt Kırılım Excel Raporunu İndir",
@@ -342,7 +387,6 @@ elif menu == "📋 Daire Cari Raporu":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
         
-        # Ekran Gösterimi (Aylık Özet Dönem Dağılımı)
         sub_df = df_detaylar[df_detaylar["daire_id"] == d_id].copy()
         if sub_df.empty:
             st.info("Bu daireye ait henüz kaydedilmiş dönemsel mali hareket bulunmuyor.")
@@ -354,7 +398,7 @@ elif menu == "📋 Daire Cari Raporu":
 
 # --- MENÜ 3: GİDER DETAYLARI VE ANALİZ ---
 elif menu == "📉 Gider Detayları & Analiz":
-    st.subheader("Site Gider Detayları, Raporlama ve İşlem Düzenleme")
+    st.subheader("Site Gider Detayları, Raporlama ve İşlem İnceleme")
     conn = db_connect()
     df_gider = pd.read_sql_query("SELECT id, kategori as 'Kategori', tarih as 'Tarih', aciklama as 'Açıklama', tutar as 'Tutar' FROM Giderler ORDER BY tarih DESC", conn)
     conn.close()
@@ -381,7 +425,7 @@ elif menu == "📉 Gider Detayları & Analiz":
         st.bar_chart(df_kat.set_index("Kategori")["Toplam Harcanan"])
         
         st.markdown("---")
-        st.markdown("### 📋 Gider İşlem Geçmişi & Dinamik Düzenleme")
+        st.markdown("### 📋 Gider İşlem Geçmişi")
         
         excel_gider = to_excel(df_gider.drop(columns=["id"]))
         st.download_button(
@@ -393,25 +437,33 @@ elif menu == "📉 Gider Detayları & Analiz":
         
         for idx, row in df_gider.iterrows():
             gider_id = int(row['id'])
-            col_data, col_edit, col_del = st.columns([8, 1, 1])
+            
+            # SADECE YÖNETİCİ DÜZENLEME VE SİLME BUTONLARINI GÖRÜR
+            if is_admin:
+                col_data, col_edit, col_del = st.columns([8, 1, 1])
+            else:
+                col_data = st.container()
+                
             with col_data:
                 st.info(f"📅 **{row['Tarih']}** | 📂 **{row['Kategori']}** | 📝 {row['Açıklama']} | 💰 **{row['Tutar']:,.2f} TL**")
-            with col_edit:
-                if st.button("✏️ Düzenle", key=f"edit_btn_{gider_id}"):
-                    st.session_state.duzenleme_gider_id = gider_id
-                    st.rerun()
-            with col_del:
-                if st.button("🗑️ Sil", key=f"del_gider_{gider_id}"):
-                    conn = db_connect()
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM Giderler WHERE id=?", (gider_id,))
-                    conn.commit()
-                    conn.close()
-                    st.success("Gider kaydı başarıyla silindi!")
-                    st.session_state.duzenleme_gider_id = None
-                    st.rerun()
+                
+            if is_admin:
+                with col_edit:
+                    if st.button("✏️ Düzenle", key=f"edit_btn_{gider_id}"):
+                        st.session_state.duzenleme_gider_id = gider_id
+                        st.rerun()
+                with col_del:
+                    if st.button("🗑️ Sil", key=f"del_gider_{gider_id}"):
+                        conn = db_connect()
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM Giderler WHERE id=?", (gider_id,))
+                        conn.commit()
+                        conn.close()
+                        st.success("Gider kaydı başarıyla silindi!")
+                        st.session_state.duzenleme_gider_id = None
+                        st.rerun()
             
-            if st.session_state.duzenleme_gider_id == gider_id:
+            if is_admin and st.session_state.duzenleme_gider_id == gider_id:
                 with st.expander("📝 Gider Bilgilerini Güncelle", expanded=True):
                     default_index = GIDER_KATEGORILERI.index(row['Kategori']) if row['Kategori'] in GIDER_KATEGORILERI else 0
                     col_form1, col_form2 = st.columns(2)
@@ -440,8 +492,12 @@ elif menu == "📉 Gider Detayları & Analiz":
                             st.session_state.duzenleme_gider_id = None
                             st.rerun()
 
-# --- MENÜ 4: YÖNETİMSEL İŞLEMLER ---
+# --- MENÜ 4: YÖNETİMSEL İŞLEMLER (SADECE ADMİN / GL5Y1 GÖREBİLİR) ---
 elif menu == "⚙️ Yönetimsel İşlemler":
+    if not is_admin:
+        st.error("⚠️ Bu alana erişim yetkiniz bulunmamaktadır.")
+        st.stop()
+        
     st.subheader("Veri Giriş ve Tanımlama Paneli")
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["💵 Toplu Aidat / Demirbaş", "📥 Tahsilat Ekle", "💸 Gider Ekle", "👤 Sakin Tanımla", "⚠️ Veritabanı Temizle"])
     
